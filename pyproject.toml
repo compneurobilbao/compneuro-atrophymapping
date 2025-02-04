@@ -1,0 +1,11 @@
+[project]
+name = "compneuro-atrophymapping"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "nilearn>=0.11.1",
+    "polars>=1.21.0",
+    "pyarrow>=19.0.0",
+]
