@@ -5,7 +5,8 @@ import numpy as np
 import nibabel as nib
 
 from nilearn import image
-from nilearn.glm.second_level import SecondLevelModel
+from nilearn.maskers import NiftiMasker
+from nilearn.glm.first_level import FirstLevelModel
 from nilearn.masking import apply_mask, unmask
 
 
@@ -45,7 +46,8 @@ def run_vbm(vbm_directory: str):
 
 def compute_atrophy_wmaps(gm_mod_merg_control: str,
                           gm_mod_merg_studygroup: str,
-                          design_matrix: np.ndarray,
+                          design_matrix_cn: np.ndarray,
+                          design_matrix_studygroup: np.ndarray,
                           output_dir: str) -> nib.nifti1.Nifti1Image:
     """_summary_
 
@@ -55,8 +57,10 @@ def compute_atrophy_wmaps(gm_mod_merg_control: str,
         _description_
     gm_mod_merg_studygroup : str
         _description_
-    design_matrix : np.ndarray
-        _description_
+    design_matrix_cn : np.ndarray
+        To fit the normative model.
+    design_matrix_studygroup : np.ndarray
+        To compute the expected VBM signal from the normative model.
     output_dir : str
         _description_
 
@@ -78,30 +82,62 @@ def compute_atrophy_wmaps(gm_mod_merg_control: str,
                                            "GM_mask.nii.gz")
     gm_mask_studygroup = image.load_img(gm_mask_studygroup_path)
 
-    # Aply masks
-    vbm_response_cn = unmask(apply_mask(gm_mod_control, gm_mask_cn),
-                             gm_mask_cn)
-    vbm_response_studygroup = unmask(apply_mask(gm_mod_studygroup, gm_mask_studygroup),
-                                     gm_mask_studygroup)
+    # Compute the joint mask
+    gm_common_mask = image.math_img("np.where((mask1 + mask2) > 0, 1.0, 0.0)",
+                                    mask1=gm_mask_cn,
+                                    mask2=gm_mask_studygroup)
+    # Initialize the masker
+    masker = NiftiMasker(mask_img=gm_common_mask).fit()
 
-    # SecondLevel Model
-    slm = SecondLevelModel(mask_img=gm_mask_cn, minimize_memory=False)
-    slm.fit(vbm_response_cn, design_matrix=design_matrix)
+    # Apply the joint mask
+    vbm_response_cn = unmask(apply_mask(gm_mod_control, gm_common_mask),
+                                     gm_common_mask)
 
-    # Build contrast (assume the first column is a column of ones, meaning all subjects are CN)
-    design_contrast = np.array([1] + (design_matrix.shape[1] - 1) * [0])
-    
-    _ = slm.compute_contrast(second_level_contrast=design_contrast)
+    vbm_response_studygroup_masked = masker.transform(gm_mod_studygroup)
 
-    # Get Residuals and compute wmaps
-    sd_of_residuals = image.math_img("np.std(residuals, axis=3)", residuals=slm.residuals)
+    # Define and fit the FirstLevelModel
+    flm = FirstLevelModel(mask_img=gm_common_mask,
+                          noise_model="ols",
+                          standardize=False,
+                          minimize_memory=False)
+    flm.fit(vbm_response_cn, design_matrices=design_matrix_cn)
 
-    wmaps = image.math_img("(orig - predicted) / sd_of_residuals[..., np.newaxis]",
-                               orig=vbm_response_studygroup,
-                               predicted=slm.predicted,
-                               sd_of_residuals=sd_of_residuals)
+    # Build contrast (identity of design matrix) and get the beta maps and the residuals
+    design_contrast = np.eye(design_matrix_cn.shape[1])
+    beta_maps = flm.compute_contrast(contrast_def=design_contrast,
+                                     output_type="effect_size")
+    beta_maps_masked = masker.transform(beta_maps)
+    flm_residuals = flm.residuals[0]
+
+    # Get the residuals from the FirstLevelModel, compute their standard deviation
+    sd_residuals = image.math_img("np.std(residuals, axis=3)", residuals=flm_residuals)
+    sd_residuals_masked = masker.transform(sd_residuals)
+
+    # Predict the VBM signal from the normative model in the studygroup from its design matrix
+    # (y = X @ Beta)
+    predicted_vbm_studygroup = design_matrix_studygroup.to_numpy() @ beta_maps_masked
+
+    # Compute the wmaps
+    original_minus_predicted = vbm_response_studygroup_masked - predicted_vbm_studygroup
+    wmaps = original_minus_predicted / sd_residuals_masked
+
+    # Remove the infinite values
+    wmaps[wmaps > 1e3] = 0
+    wmaps = masker.inverse_transform(wmaps)
+
+    # Save (original - predicted)
+    original_minus_predicted = masker.inverse_transform(original_minus_predicted)
+    original_minus_predicted.to_filename(os.path.join(output_dir,
+                                                      "original_minus_predicted.nii.gz"))
 
     # Save the wmaps
     wmaps.to_filename(os.path.join(output_dir, "wmaps.nii.gz"))
+
+    # Save the betamaps
+    beta_maps.to_filename(os.path.join(output_dir, "betamaps.nii.gz"))
+
+    # Save the residuals SD
+    sd_residuals.to_filename(os.path.join(output_dir, "sd_residuals.nii.gz"))
+    
 
     return wmaps

@@ -15,7 +15,8 @@ def run_pipeline():
     # Compute atrophy maps
     proc.compute_atrophy_wmaps(gm_mod_merg_control=args.control_vbm_path,
                                gm_mod_merg_studygroup=args.studygroup_vbm_path,
-                               design_matrix=args.df_design_mat,
+                               design_matrix_cn=args.df_design_mat_cn,
+                               design_matrix_studygroup=args.df_design_mat_studygroup,
                                output_dir=args.output_dir)
 
 if __name__ == "__main__":
