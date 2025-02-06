@@ -69,13 +69,18 @@ def _check_df_design_mat(design_mat_path: pl.DataFrame):
      # Check if the design matrix is in correct format
     if osp.exists(design_mat_path):
         if (not design_mat_path.endswith(".mat") and
-            not design_mat_path.endswith(".tsv")):
-            err_msg = ("Design matrix must be in FSL (.mat) or TSV format.")
+            not design_mat_path.endswith(".tsv") and
+            not design_mat_path.endswith(".txt")):
+            err_msg = ("Design matrix must be in FSL (.mat), TSV, or .txt (with ' ' separator) format.")
             raise ValueError(err_msg)
         elif design_mat_path.endswith(".tsv"):
             df_design_mat = pl.read_csv(design_mat_path,
                                              has_header=False,
-                                             separator="\t").cast(pl.Float32).to_pandas()
+                                             separator="\t").cast(pl.Float32)
+        elif design_mat_path.endswith(".txt"):
+            df_design_mat = pl.read_csv(design_mat_path,
+                                             has_header=False,
+                                             separator=" ").cast(pl.Float32)
         # If FSL format, then convert it to TXT, read it, and store it as a numpy array
         elif design_mat_path.endswith(".mat"):
             design_txt_path = design_mat_path.replace(".mat", ".txt")
@@ -84,7 +89,7 @@ def _check_df_design_mat(design_mat_path: pl.DataFrame):
             sp.run(cmd, shell=True)
             df_design_mat = pl.read_csv(design_txt_path,
                                              separator=" ",
-                                             has_header=False).cast(pl.Float32).to_pandas()
+                                             has_header=False).cast(pl.Float32)
 
         if df_design_mat.shape[1] < 3:
                 err_msg = ("Design matrix must have at least 3 columns (no header!):\n"
@@ -94,11 +99,15 @@ def _check_df_design_mat(design_mat_path: pl.DataFrame):
         # Check if the first column is all ones
         if not all(df_design_mat.to_numpy()[:, 0] == 1):
             err_msg = ("The first column of the design matrix must be a column of 1s.")
-            raise ValueError(err_msg)
+            print(err_msg)
+            # Add the column of ones to the dataframe
+            ones_col = pl.Series("ones", df_design_mat.shape[0] * [1])
+            df_design_mat.insert_column(0, ones_col)
     else:
         raise FileNotFoundError(f"Design matrix not found at {design_mat_path}")
 
-    return df_design_mat
+    df_design_mat_pandas = df_design_mat.to_pandas()
+    return df_design_mat_pandas
 
 
 def check_args_and_data():
@@ -169,6 +178,5 @@ def check_args_and_data():
     if not osp.exists(args.output_dir):
         makedirs(args.output_dir, exist_ok=True)
         warnings.warn("Output directory does not exist. Creating it.")
-            
 
     return args
