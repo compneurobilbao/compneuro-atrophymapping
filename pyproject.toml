@@ -1,11 +1,20 @@
 [project]
 name = "compneuro-atrophymapping"
 version = "0.1.0"
-description = "Add your description here"
+description = "Compute atrophy w-maps using T1w images, aimed to be used in network mapping analyses"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "matplotlib>=3.10.0",
     "nilearn>=0.11.1",
     "polars>=1.21.0",
     "pyarrow>=19.0.0",
+    "pytest>=8.3.4",
 ]
+
+[project.scripts]
+compute_wmaps = "compneuro_atrophy_mapping.atrophy_map_pipeline:run_pipeline"
+
+[tool.uv]
+package = true
+managed = true
