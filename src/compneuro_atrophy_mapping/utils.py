@@ -65,8 +65,18 @@ def setup_parser():
     return args
 
 
+def _standardize_df(df: pl.DataFrame):
+    # Standardize all columns except the first one
+    df_standardized = df.with_columns([
+        (pl.col(col) - pl.col(col).mean()) / pl.col(col).std()
+        for col in df.columns[1:]
+    ])
+
+    return df_standardized
+
+
 def _check_df_design_mat(design_mat_path: pl.DataFrame):
-     # Check if the design matrix is in correct format
+    # Check if the design matrix is in correct format
     if osp.exists(design_mat_path):
         if (not design_mat_path.endswith(".mat") and
             not design_mat_path.endswith(".tsv") and
@@ -96,18 +106,23 @@ def _check_df_design_mat(design_mat_path: pl.DataFrame):
                            "{1s, Age, Sex}. Optionals: {TIV, [MRI B0], [Center]}")
                 raise ValueError(err_msg)
 
+        # Standardize the design matrix
+        df_design_mat_standardized = _standardize_df(df_design_mat)
+
         # Check if the first column is all ones
-        if not all(df_design_mat.to_numpy()[:, 0] == 1):
+        if not all(df_design_mat_standardized.to_numpy()[:, 0] == 1):
             err_msg = ("The first column of the design matrix must be a column of 1s.")
             print(err_msg)
             # Add the column of ones to the dataframe
-            ones_col = pl.Series("ones", df_design_mat.shape[0] * [1])
-            df_design_mat.insert_column(0, ones_col)
+            ones_col = pl.Series("ones", df_design_mat_standardized.shape[0] * [1])
+            df_design_mat_standardized.insert_column(0, ones_col)
+        df_design_mat_standardized_pandas = df_design_mat_standardized.to_pandas()
+
+        return df_design_mat_standardized_pandas
+
     else:
         raise FileNotFoundError(f"Design matrix not found at {design_mat_path}")
 
-    df_design_mat_pandas = df_design_mat.to_pandas()
-    return df_design_mat_pandas
 
 
 def check_args_and_data():
