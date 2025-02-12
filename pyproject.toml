@@ -1,19 +1,23 @@
 [project]
 name = "compneuro-atrophymapping"
 version = "0.1.0"
-description = "Compute atrophy w-maps using T1w images, aimed to be used in network mapping analyses"
+description = "Compute W-score maps using T1w or VBM images, aimed to be used in network mapping analyses"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "ipykernel>=6.29.5",
     "matplotlib>=3.10.0",
     "nilearn>=0.11.1",
     "polars>=1.21.0",
     "pyarrow>=19.0.0",
     "pytest>=8.3.4",
+    "statsmodels>=0.14.4",
+    "tqdm>=4.67.1",
 ]
 
 [project.scripts]
 compute_wmaps = "compneuro_atrophy_mapping.atrophy_map_pipeline:run_pipeline"
+binarize_wmaps = "compneuro_atrophy_mapping.binarize_wmaps:run_pipeline"
 
 [tool.uv]
 package = true
