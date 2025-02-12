@@ -2,12 +2,12 @@ import os
 import subprocess as sp
 
 import numpy as np
-import nibabel as nib
+import statsmodels.api as sm
 
 from nilearn import image
 from nilearn.maskers import NiftiMasker
-from nilearn.glm.first_level import FirstLevelModel
-from nilearn.masking import apply_mask, unmask
+
+from tqdm import tqdm
 
 
 def run_vbm(vbm_directory: str):
@@ -31,7 +31,7 @@ def run_vbm(vbm_directory: str):
             f"cd {vbm_directory} && $FSLDIR/bin/$FSLDIR/bin/fslvbm_3_proc"]
     outputs = []
     for i, cmd in enumerate(cmds):
-        outputs.append(f"VBM step {i} logs: {sp.run(cmd, shell=True, capture_output=True)}")
+        outputs.append(f"VBM step {i} logs: {sp.run(cmd, shell=True, capture_output=True)}\n")
 
     # Print the logs
     print(outputs)
@@ -44,11 +44,10 @@ def run_vbm(vbm_directory: str):
         raise RuntimeError(err_msg)
 
 
-def compute_atrophy_wmaps(gm_mod_merg_control: str,
-                          gm_mod_merg_studygroup: str,
-                          design_matrix_cn: np.ndarray,
-                          design_matrix_studygroup: np.ndarray,
-                          output_dir: str) -> nib.nifti1.Nifti1Image:
+def compute_wmaps_from_vbm(gm_mod_merg_control: str,
+                           gm_mod_merg_studygroup: str,
+                           design_matrix_cn: np.ndarray,
+                           design_matrix_studygroup: np.ndarray) -> dict:
     """_summary_
 
     Parameters
@@ -61,13 +60,11 @@ def compute_atrophy_wmaps(gm_mod_merg_control: str,
         To fit the normative model.
     design_matrix_studygroup : np.ndarray
         To compute the expected VBM signal from the normative model.
-    output_dir : str
-        _description_
 
     Returns
     -------
-    nib.nifti1.Nifti1Image
-        _description_
+    dict
+        Dictionary containing the gm_common_mask, beta, t, p-val, and W-score maps.
     """
     # Read the GM_mod_merg images
     gm_mod_control = image.load_img(gm_mod_merg_control)
@@ -83,61 +80,79 @@ def compute_atrophy_wmaps(gm_mod_merg_control: str,
     gm_mask_studygroup = image.load_img(gm_mask_studygroup_path)
 
     # Compute the joint mask
-    gm_common_mask = image.math_img("np.where((mask1 + mask2) > 0, 1.0, 0.0)",
+    gm_common_mask = image.math_img("np.where((mask1 * mask2) > 0, 1.0, 0.0)",
                                     mask1=gm_mask_cn,
                                     mask2=gm_mask_studygroup)
+
     # Initialize the masker
     masker = NiftiMasker(mask_img=gm_common_mask).fit()
 
     # Apply the joint mask
-    vbm_response_cn = unmask(apply_mask(gm_mod_control, gm_common_mask),
-                                     gm_common_mask)
-
+    vbm_response_cn_masked = masker.transform(gm_mod_control)
     vbm_response_studygroup_masked = masker.transform(gm_mod_studygroup)
 
-    # Define and fit the FirstLevelModel
-    flm = FirstLevelModel(mask_img=gm_common_mask,
-                          noise_model="ols",
-                          standardize=False,
-                          minimize_memory=False)
-    flm.fit(vbm_response_cn, design_matrices=design_matrix_cn)
+    # Unmask to operate in image form if needed
+    gm_mod_control = masker.inverse_transform(vbm_response_cn_masked)
+    gm_mod_studygroup = masker.inverse_transform(vbm_response_studygroup_masked)
 
-    # Build contrast (identity of design matrix) and get the beta maps and the residuals
-    design_contrast = np.eye(design_matrix_cn.shape[1])
-    beta_maps = flm.compute_contrast(contrast_def=design_contrast,
-                                     output_type="effect_size")
-    beta_maps_masked = masker.transform(beta_maps)
-    flm_residuals = flm.residuals[0]
+    # Initialize the maps
+    n_voxels = vbm_response_cn_masked.shape[1]
+    n_regressors = design_matrix_cn.shape[1]
+    betas = np.zeros([n_voxels, n_regressors])
+    t_stats = np.zeros([n_voxels, n_regressors])
+    p_values = np.zeros([n_voxels, n_regressors])
 
-    # Get the residuals from the FirstLevelModel, compute their standard deviation
-    sd_residuals = image.math_img("np.std(residuals, axis=3)", residuals=flm_residuals)
-    sd_residuals_masked = masker.transform(sd_residuals)
-
-    # Predict the VBM signal from the normative model in the studygroup from its design matrix
-    # (y = X @ Beta)
-    predicted_vbm_studygroup = design_matrix_studygroup.to_numpy() @ beta_maps_masked
-
-    # Compute the wmaps
-    original_minus_predicted = vbm_response_studygroup_masked - predicted_vbm_studygroup
-    wmaps = original_minus_predicted / sd_residuals_masked
-
-    # Remove the infinite values
-    wmaps[wmaps > 1e3] = 0
-    wmaps = masker.inverse_transform(wmaps)
-
-    # Save (original - predicted)
-    original_minus_predicted = masker.inverse_transform(original_minus_predicted)
-    original_minus_predicted.to_filename(os.path.join(output_dir,
-                                                      "original_minus_predicted.nii.gz"))
-
-    # Save the wmaps
-    wmaps.to_filename(os.path.join(output_dir, "wmaps.nii.gz"))
-
-    # Save the betamaps
-    beta_maps.to_filename(os.path.join(output_dir, "betamaps.nii.gz"))
-
-    # Save the residuals SD
-    sd_residuals.to_filename(os.path.join(output_dir, "sd_residuals.nii.gz"))
+    # Fit the OLS model voxelwise
+    print("[INFO]: Fitting the voxelwise OLS model.")
+    for voxel in tqdm(range(n_voxels)):
+        y = vbm_response_cn_masked[:, voxel]
+        model = sm.OLS(y, design_matrix_cn)
+        results = model.fit()
     
+        betas[voxel, :] = results.params
+        t_stats[voxel, :] = results.tvalues
+        p_values[voxel, :] = results.pvalues
 
-    return wmaps
+    # Unmask the statistical maps
+    beta_maps = masker.inverse_transform(betas.T)
+    t_maps = masker.inverse_transform(t_stats.T)
+    p_values_maps = masker.inverse_transform(p_values.T)
+
+    # Compute residuals
+    predicted = design_matrix_cn @ betas.T
+    residuals = vbm_response_cn_masked - predicted
+    residuals_im = masker.inverse_transform(residuals)
+    sd_of_residuals = image.math_img("np.std(a, axis=3)", a=residuals_im)
+
+    # Compute the W-score maps
+    wmaps = []
+    predicted_studygroup = design_matrix_studygroup @ betas.T
+    gm_predicted_studygroup_im = masker.inverse_transform(predicted_studygroup)
+    for i in range(gm_mod_studygroup.shape[3]):
+        pred = image.index_img(gm_predicted_studygroup_im, i)
+        obsr = image.index_img(gm_mod_studygroup, i)
+        wmap = image.math_img("(a - b) / c",
+                              a=obsr,
+                              b=pred,
+                              c=sd_of_residuals)
+        wmaps.append(wmap)
+
+    # Concatenate the wmaps
+    wmaps = image.concat_imgs(wmaps)
+
+    # Return the results
+    results = {"betamaps": beta_maps,
+                "tmaps": t_maps,
+                "pvalues": p_values_maps,
+                "wmaps": wmaps,
+                "gm_common_mask": gm_common_mask,
+                "masker": masker,
+                "sd_of_residuals": sd_of_residuals}
+
+    return results
+
+
+def compute_wmaps_from_model():
+    # TODO: Design how to reuse an already fit model to compute Wmaps on new data.
+    # NOTE: It is not as trivial as reusing the betas. Masking and unmasking must be handled with care.
+    pass

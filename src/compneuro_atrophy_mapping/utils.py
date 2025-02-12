@@ -8,7 +8,7 @@ from os import makedirs
 from argparse import ArgumentParser
 
 
-def setup_parser():
+def setup_full_pipeline_parser():
     parser = ArgumentParser(description="Compute atrophy maps from VBM data")
 
     # VBM arguments
@@ -63,6 +63,14 @@ def setup_parser():
 
     args = parser.parse_args()
     return args
+
+
+def setup_apply_model_parser():
+    # TODO: Design how to reuse an already fit model to compute Wmaps on new data.
+    # NOTE: It is not as trivial as reusing the betas. Masking and unmasking must be handled with care.
+    parser = ArgumentParser(description="Atrophy maps from a given model.")
+    parser
+    pass
 
 
 def _standardize_df(df: pl.DataFrame):
@@ -125,8 +133,8 @@ def _check_df_design_mat(design_mat_path: pl.DataFrame):
 
 
 
-def check_args_and_data():
-    args = setup_parser()
+def check_full_pipeline_args():
+    args = setup_full_pipeline_parser()
 
     # Check if the VBM data was provided (control group)
     if args.control_vbm_path is not None:
