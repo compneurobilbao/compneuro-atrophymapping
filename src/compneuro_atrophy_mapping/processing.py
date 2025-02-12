@@ -1,3 +1,4 @@
+import warnings
 import os
 import subprocess as sp
 
@@ -8,6 +9,9 @@ from nilearn import image
 from nilearn.maskers import NiftiMasker
 
 from tqdm import tqdm
+
+# Ignore the RuntimeWarnings
+warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 
 def run_vbm(vbm_directory: str):
@@ -103,7 +107,7 @@ def compute_wmaps_from_vbm(gm_mod_merg_control: str,
     p_values = np.zeros([n_voxels, n_regressors])
 
     # Fit the OLS model voxelwise
-    print("[INFO]: Fitting the voxelwise OLS model.")
+    print("[INFO] Fitting the voxelwise OLS model.")
     for voxel in tqdm(range(n_voxels)):
         y = vbm_response_cn_masked[:, voxel]
         model = sm.OLS(y, design_matrix_cn)
@@ -140,13 +144,16 @@ def compute_wmaps_from_vbm(gm_mod_merg_control: str,
     # Concatenate the wmaps
     wmaps = image.concat_imgs(wmaps)
 
+    # Remove NaN values from wmaps
+    wmaps = image.math_img("np.nan_to_num(a, nan=0.0, posinf=0.0, neginf=0.0)",
+                           a=wmaps)
+
     # Return the results
     results = {"betamaps": beta_maps,
                 "tmaps": t_maps,
                 "pvalues": p_values_maps,
                 "wmaps": wmaps,
                 "gm_common_mask": gm_common_mask,
-                "masker": masker,
                 "sd_of_residuals": sd_of_residuals}
 
     return results

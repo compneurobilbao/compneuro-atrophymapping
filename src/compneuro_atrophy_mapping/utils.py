@@ -119,7 +119,8 @@ def _check_df_design_mat(design_mat_path: pl.DataFrame):
 
         # Check if the first column is all ones
         if not all(df_design_mat_standardized.to_numpy()[:, 0] == 1):
-            err_msg = ("The first column of the design matrix must be a column of 1s.")
+            err_msg = ("[INFO] The first column of the design matrix must be a column of 1s. "
+                       "Adding a preceding column of 1s to the design matrix.")
             print(err_msg)
             # Add the column of ones to the dataframe
             ones_col = pl.Series("ones", df_design_mat_standardized.shape[0] * [1])
