@@ -56,6 +56,14 @@ def setup_full_pipeline_parser():
                         help=help_dsgn_mat_studygroup,
                         required=False)
 
+    help_n_jobs = ("Number of jobs to run in parallel when fitting the OLS model. "
+                   "If -1, then all available CPUs will be used.")
+    parser.add_argument("-n", "--n_jobs",
+                        type=int,
+                        help=help_n_jobs,
+                        required=False,
+                        default=1)
+
     parser.add_argument("-o", "--output_dir",
                         type=str,
                         help="Path to the output directory to store the wmaps",
@@ -197,6 +205,13 @@ def check_full_pipeline_args():
     # Check if the design matrix is correct
     args.df_design_mat_cn = _check_df_design_mat(args.control_design_matrix)
     args.df_design_mat_studygroup = _check_df_design_mat(args.studygroup_design_matrix)
+
+    # Check n_jobs
+    if args.n_jobs < 1 and args.n_jobs != -1:
+        err_msg = "Number of jobs must be at least 1."
+        raise ValueError(err_msg)
+    elif args.n_jobs == -1:
+        print("[INFO] Running voxelwise OLS fitting in parallel with all available CPUs.")
 
     # Check if output path exists, if not create it
     if not osp.exists(args.output_dir):

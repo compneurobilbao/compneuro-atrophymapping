@@ -5,10 +5,13 @@ import subprocess as sp
 import numpy as np
 import statsmodels.api as sm
 
+from joblib import Parallel, delayed
+
 from nilearn import image
 from nilearn.maskers import NiftiMasker
 
 from tqdm import tqdm
+from tqdm.contrib.concurrent import process_map
 
 # Ignore the RuntimeWarnings
 warnings.filterwarnings("ignore", category=RuntimeWarning)
@@ -48,10 +51,65 @@ def run_vbm(vbm_directory: str):
         raise RuntimeError(err_msg)
 
 
+def fit_single_voxel(voxel_data, design_mat):
+    model = sm.OLS(voxel_data, design_mat)
+    results = model.fit()
+    return (results.params,
+            results.tvalues,
+            results.pvalues,
+            results.rsquared)
+
+
+def fit_voxelwise_ols_parallel(masked_data, design_matrix, n_jobs=-1):
+    n_voxels = masked_data.shape[1]
+    n_regressors = design_matrix.shape[1]
+    results = Parallel(n_jobs=n_jobs, verbose=1)(
+        delayed(fit_single_voxel)(
+            masked_data[:, voxel],
+            design_matrix
+        ) for voxel in tqdm(range(n_voxels))
+    )
+
+    # Initialize output arrays
+    betas = np.zeros((n_voxels, n_regressors))
+    t_stats = np.zeros((n_voxels, n_regressors))
+    p_values = np.zeros((n_voxels, n_regressors))
+    r_squared = np.zeros(n_voxels)
+    
+    # Unpack results
+    for voxel, (params, tvalues, pvalues, rsquared) in enumerate(results):
+        betas[voxel, :] = params
+        t_stats[voxel, :] = tvalues
+        p_values[voxel, :] = pvalues
+        r_squared[voxel] = rsquared
+    
+    return betas, t_stats, p_values, r_squared
+
+
+def fit_ols(masked_cn_im: np.ndarray, design_mat_cn: np.ndarray):
+    # Initialize the maps
+    n_voxels = masked_cn_im.shape[1]
+    n_regressors = design_mat_cn.shape[1]
+    betas = np.zeros([n_voxels, n_regressors])
+    t_stats = np.zeros([n_voxels, n_regressors])
+    p_values = np.zeros([n_voxels, n_regressors])
+    r_squared = np.zeros(n_voxels)
+    for voxel in tqdm(range(n_voxels)):
+        results = fit_single_voxel(voxel_data = masked_cn_im[:, voxel],
+                                   design_mat = design_mat_cn)
+        betas[voxel, :] = results[0]
+        t_stats[voxel, :] = results[1]
+        p_values[voxel, :] = results[2]
+        r_squared[voxel] = results[3]
+
+    return betas, t_stats, p_values, r_squared
+
+
 def compute_wmaps_from_vbm(gm_mod_merg_control: str,
                            gm_mod_merg_studygroup: str,
                            design_matrix_cn: np.ndarray,
-                           design_matrix_studygroup: np.ndarray) -> dict:
+                           design_matrix_studygroup: np.ndarray,
+                           n_jobs: int=None) -> dict:
     """_summary_
 
     Parameters
@@ -70,6 +128,7 @@ def compute_wmaps_from_vbm(gm_mod_merg_control: str,
     dict
         Dictionary containing the gm_common_mask, beta, t, p-val, and W-score maps.
     """
+
     # Read the GM_mod_merg images
     gm_mod_control = image.load_img(gm_mod_merg_control)
     gm_mod_studygroup = image.load_img(gm_mod_merg_studygroup)
@@ -88,7 +147,7 @@ def compute_wmaps_from_vbm(gm_mod_merg_control: str,
                                     mask1=gm_mask_cn,
                                     mask2=gm_mask_studygroup)
 
-    # Initialize the masker
+    # Initialize the masker and fit it to the common mask
     masker = NiftiMasker(mask_img=gm_common_mask).fit()
 
     # Apply the joint mask
@@ -99,25 +158,17 @@ def compute_wmaps_from_vbm(gm_mod_merg_control: str,
     gm_mod_control = masker.inverse_transform(vbm_response_cn_masked)
     gm_mod_studygroup = masker.inverse_transform(vbm_response_studygroup_masked)
 
-    # Initialize the maps
-    n_voxels = vbm_response_cn_masked.shape[1]
-    n_regressors = design_matrix_cn.shape[1]
-    betas = np.zeros([n_voxels, n_regressors])
-    t_stats = np.zeros([n_voxels, n_regressors])
-    p_values = np.zeros([n_voxels, n_regressors])
-    r_squared = np.zeros(n_voxels)
-
     # Fit the OLS model voxelwise
     print("[INFO] Fitting the voxelwise OLS model.")
-    for voxel in tqdm(range(n_voxels)):
-        y = vbm_response_cn_masked[:, voxel]
-        model = sm.OLS(y, design_matrix_cn)
-        results = model.fit()
-    
-        betas[voxel, :] = results.params
-        t_stats[voxel, :] = results.tvalues
-        p_values[voxel, :] = results.pvalues
-        r_squared[voxel] = results.rsquared
+    if n_jobs == 1:  # Single job
+        betas, t_stats, p_values, r_squared = fit_ols(vbm_response_cn_masked,
+                                                      design_matrix_cn)
+    elif n_jobs < 1 and n_jobs != -1:  # Throw error because n_jobs must be higher or equal to 1
+        raise ValueError("[ERROR]: n_jobs must be higher than 0 in compute_wmaps_from_vbm.")
+    else:  # n_jobs > 1
+        betas, t_stats, p_values, r_squared = fit_voxelwise_ols_parallel(vbm_response_cn_masked,
+                                                                         design_matrix_cn,
+                                                                         n_jobs=n_jobs)
 
     # Unmask the statistical maps
     print("[INFO] Finished fitting voxelwise OLS model, check the R-square map to see the goodness of fit.")
