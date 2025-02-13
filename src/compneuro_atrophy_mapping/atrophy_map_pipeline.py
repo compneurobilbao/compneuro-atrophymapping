@@ -21,6 +21,7 @@ def run_pipeline():
                                          design_matrix_studygroup=args.df_design_mat_studygroup)
 
     # Save the results
+    print(f"[INFO] Saving the results to: {args.output_dir}")
     output_dir = args.output_dir
     for name, map in results.items():
         map.to_filename(opj(output_dir, f"{name}.nii.gz"))

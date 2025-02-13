@@ -105,6 +105,7 @@ def compute_wmaps_from_vbm(gm_mod_merg_control: str,
     betas = np.zeros([n_voxels, n_regressors])
     t_stats = np.zeros([n_voxels, n_regressors])
     p_values = np.zeros([n_voxels, n_regressors])
+    r_squared = np.zeros(n_voxels)
 
     # Fit the OLS model voxelwise
     print("[INFO] Fitting the voxelwise OLS model.")
@@ -116,11 +117,14 @@ def compute_wmaps_from_vbm(gm_mod_merg_control: str,
         betas[voxel, :] = results.params
         t_stats[voxel, :] = results.tvalues
         p_values[voxel, :] = results.pvalues
+        r_squared[voxel] = results.rsquared
 
     # Unmask the statistical maps
+    print("[INFO] Finished fitting voxelwise OLS model, check the R-square map to see the goodness of fit.")
     beta_maps = masker.inverse_transform(betas.T)
     t_maps = masker.inverse_transform(t_stats.T)
     p_values_maps = masker.inverse_transform(p_values.T)
+    r_squared_map = masker.inverse_transform(r_squared)
 
     # Compute residuals
     predicted = design_matrix_cn @ betas.T
@@ -147,14 +151,16 @@ def compute_wmaps_from_vbm(gm_mod_merg_control: str,
     # Remove NaN values from wmaps
     wmaps = image.math_img("np.nan_to_num(a, nan=0.0, posinf=0.0, neginf=0.0)",
                            a=wmaps)
+    print("[INFO] Finished computing the W-score maps.")
 
-    # Return the results
+    # Organize the results
     results = {"betamaps": beta_maps,
                 "tmaps": t_maps,
                 "pvalues": p_values_maps,
                 "wmaps": wmaps,
                 "gm_common_mask": gm_common_mask,
-                "sd_of_residuals": sd_of_residuals}
+                "sd_of_residuals": sd_of_residuals,
+                "r_squared": r_squared_map}
 
     return results
 
