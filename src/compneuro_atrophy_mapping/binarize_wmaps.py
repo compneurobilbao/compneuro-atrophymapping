@@ -7,7 +7,7 @@ def _setup_parser():
     parser = ArgumentParser()
     parser.add_argument("--wmap", "-w", type=str, required=True)
     parser.add_argument("--threshold", "-t", type=float, required=True)
-    
+
     args = parser.parse_args()
 
     return args

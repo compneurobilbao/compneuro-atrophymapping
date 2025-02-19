@@ -6,7 +6,7 @@ import compneuro_atrophy_mapping.processing as proc
 
 def run_pipeline():
     # Setup the arguments and all inputs
-    args = utils.check_full_pipeline_args()
+    args = utils.check_wmap_pipeline_args()
 
     # Run VBM if needed
     if args.need_control_vbm:

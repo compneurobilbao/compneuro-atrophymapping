@@ -18,6 +18,7 @@ dependencies = [
 [project.scripts]
 compute_wmaps = "compneuro_atrophy_mapping.atrophy_map_pipeline:run_pipeline"
 binarize_wmaps = "compneuro_atrophy_mapping.binarize_wmaps:run_pipeline"
+filter_clusters = "compneuro_atrophy_mapping.filter_clusters:run_pipeline"
 
 [tool.uv]
 package = true

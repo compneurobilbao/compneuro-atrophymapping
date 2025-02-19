@@ -1,14 +1,15 @@
+from io import BytesIO
 import os.path as osp
 import warnings
 import subprocess as sp
 
-import polars as pl
-
 from os import makedirs
 from argparse import ArgumentParser
 
+import polars as pl
 
-def setup_full_pipeline_parser():
+
+def setup_wmap_pipeline_parser():
     parser = ArgumentParser(description="Compute atrophy maps from VBM data")
 
     # VBM arguments
@@ -142,8 +143,8 @@ def _check_df_design_mat(design_mat_path: pl.DataFrame):
 
 
 
-def check_full_pipeline_args():
-    args = setup_full_pipeline_parser()
+def check_wmap_pipeline_args():
+    args = setup_wmap_pipeline_parser()
 
     # Check if the VBM data was provided (control group)
     if args.control_vbm_path is not None:
@@ -219,3 +220,12 @@ def check_full_pipeline_args():
         warnings.warn("Output directory does not exist. Creating it.")
 
     return args
+
+
+def stdout_to_dataframe(stdout: bytes,
+                         header: bool = True,
+                         sep: str = "\t") -> pl.DataFrame:
+
+    stdout_bytes = BytesIO(stdout)
+
+    return pl.read_csv(stdout_bytes, has_header=header, separator=sep)
