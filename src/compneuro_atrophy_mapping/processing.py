@@ -9,11 +9,13 @@ from joblib import Parallel, delayed
 
 from nilearn import image
 from nilearn.maskers import NiftiMasker
+from nilearn.masking import apply_mask, unmask
 
 from tqdm import tqdm
-from tqdm.contrib.concurrent import process_map
 
-# Ignore the RuntimeWarnings
+from compneuro_atrophy_mapping.data import FULL_MNI_152_HOLELESS_BRAIN
+
+# Ignore the RuntimeWarnings to ignore the division by zero raised by numpy
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 
@@ -30,12 +32,15 @@ def run_vbm(vbm_directory: str):
     -------
     None
     """
+    # Get the FSL binary directory
+    FSLBIN = os.path.join(os.getenv("FSLDIR"), "bin")
+
     if not os.path.exists(vbm_directory):
         raise IsADirectoryError(f"[ERROR-VBM]: The provided directory {vbm_directory} does not exist.")
 
-    cmds = [f"cd {vbm_directory} && $FSLDIR/bin/$FSLDIR/bin/fslvbm_1_bet -b",
-            f"cd {vbm_directory} && $FSLDIR/bin/$FSLDIR/bin/fslvbm_2_template -n",
-            f"cd {vbm_directory} && $FSLDIR/bin/$FSLDIR/bin/fslvbm_3_proc"]
+    cmds = [f"cd {vbm_directory} && {FSLBIN}/bin/fslvbm_1_bet -b",
+            f"cd {vbm_directory} && {FSLBIN}/bin/fslvbm_2_template -n",
+            f"cd {vbm_directory} && {FSLBIN}/bin/fslvbm_3_proc"]
     outputs = []
     for i, cmd in enumerate(cmds):
         outputs.append(f"VBM step {i} logs: {sp.run(cmd, shell=True, capture_output=True)}\n")
@@ -148,15 +153,15 @@ def compute_wmaps_from_vbm(gm_mod_merg_control: str,
                                     mask2=gm_mask_studygroup)
 
     # Initialize the masker and fit it to the common mask
-    masker = NiftiMasker(mask_img=gm_common_mask).fit()
+    masker_mni = NiftiMasker(mask_img=FULL_MNI_152_HOLELESS_BRAIN).fit()
 
     # Apply the joint mask
-    vbm_response_cn_masked = masker.transform(gm_mod_control)
-    vbm_response_studygroup_masked = masker.transform(gm_mod_studygroup)
+    vbm_response_cn_masked = masker_mni.transform(gm_mod_control)
+    vbm_response_studygroup_masked = masker_mni.transform(gm_mod_studygroup)
 
     # Unmask to operate in image form if needed
-    gm_mod_control = masker.inverse_transform(vbm_response_cn_masked)
-    gm_mod_studygroup = masker.inverse_transform(vbm_response_studygroup_masked)
+    gm_mod_control = masker_mni.inverse_transform(vbm_response_cn_masked)
+    gm_mod_studygroup = masker_mni.inverse_transform(vbm_response_studygroup_masked)
 
     # Fit the OLS model voxelwise
     print("[INFO] Fitting the voxelwise OLS model.")
@@ -172,21 +177,21 @@ def compute_wmaps_from_vbm(gm_mod_merg_control: str,
 
     # Unmask the statistical maps
     print("[INFO] Finished fitting voxelwise OLS model, check the R-square map to see the goodness of fit.")
-    beta_maps = masker.inverse_transform(betas.T)
-    t_maps = masker.inverse_transform(t_stats.T)
-    p_values_maps = masker.inverse_transform(p_values.T)
-    r_squared_map = masker.inverse_transform(r_squared)
+    beta_maps = masker_mni.inverse_transform(betas.T)
+    t_maps = masker_mni.inverse_transform(t_stats.T)
+    p_values_maps = masker_mni.inverse_transform(p_values.T)
+    r_squared_map = masker_mni.inverse_transform(r_squared)
 
     # Compute residuals
     predicted = design_matrix_cn @ betas.T
     residuals = vbm_response_cn_masked - predicted
-    residuals_im = masker.inverse_transform(residuals)
+    residuals_im = masker_mni.inverse_transform(residuals)
     sd_of_residuals = image.math_img("np.std(a, axis=3)", a=residuals_im)
 
     # Compute the W-score maps
     wmaps = []
     predicted_studygroup = design_matrix_studygroup @ betas.T
-    gm_predicted_studygroup_im = masker.inverse_transform(predicted_studygroup)
+    gm_predicted_studygroup_im = masker_mni.inverse_transform(predicted_studygroup)
     for i in range(gm_mod_studygroup.shape[3]):
         pred = image.index_img(gm_predicted_studygroup_im, i)
         obsr = image.index_img(gm_mod_studygroup, i)
@@ -209,9 +214,13 @@ def compute_wmaps_from_vbm(gm_mod_merg_control: str,
                 "tmaps": t_maps,
                 "pvalues": p_values_maps,
                 "wmaps": wmaps,
-                "gm_common_mask": gm_common_mask,
                 "sd_of_residuals": sd_of_residuals,
                 "r_squared": r_squared_map}
+
+    # Apply the common subject mask to the outputs before saving (only GM results wanted)
+    results = {key: unmask(apply_mask(results[key], gm_common_mask), gm_common_mask) for key in results.keys()}
+    # Include the common mask
+    results["gm_common_mask"] = gm_common_mask
 
     return results
 
