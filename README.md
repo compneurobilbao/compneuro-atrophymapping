@@ -27,7 +27,11 @@ If not all groups have `GM_mod_merg_sX`, this tool will detect which groups have
 `compute_atrophy_wmaps [...]`
 
 ## Outputs
-
+WIP
 
 ## Citing
-...
+The methodology followed in this tool is based on the following work: [Atrophy patterns in early clinical stages across distinct phenotypes of Alzheimer's disease](https://doi.org/10.1002/hbm.22927) 
+
+
+## License
+This project is licensed under the Apache License 2.0 - see the [LICENSE](./LICENSE) file for details
