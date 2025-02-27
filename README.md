@@ -8,6 +8,7 @@ This repo contains the code used by the Computational Neuroimaging Lab at BioBiz
 
 
 ## Prerequisites
+NOTE: SECTION SUBJECT TO CHANGE
 In case you have **not run VBM yet**:
 - T1w images of a control group
 - T1w images of a clinical group
@@ -51,6 +52,6 @@ We thank Rik Ossenkoppele and Colin Groot-Remmers for sharing their original cod
 This project is licensed under the Apache License 2.0 - see the [LICENSE](./LICENSE) file for details
 
 ## TODO (highest priority first)
-- [ ] Adapt the code to work with joint VBM analysis, not per group
+- [ ] Adapt the code to work with joint VBM analysis, not per group (new branch)
 - [ ] Add a section on how to install
 - [ ] Dockerize

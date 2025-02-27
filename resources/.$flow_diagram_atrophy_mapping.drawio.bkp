@@ -1,6 +1,6 @@
 <mxfile host="Electron" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/24.7.17 Chrome/128.0.6613.36 Electron/32.0.1 Safari/537.36" version="24.7.17">
   <diagram name="Page-1" id="9O0WCs2nOPyIhRcXitbe">
-    <mxGraphModel dx="819" dy="478" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="0" pageScale="1" pageWidth="827" pageHeight="1169" math="1" shadow="0">
+    <mxGraphModel dx="600" dy="355" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="0" pageScale="1" pageWidth="827" pageHeight="1169" math="1" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
@@ -90,6 +90,21 @@
         <mxCell id="lSvSTN2YTzCQWF_QsMw--41" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="1" source="lSvSTN2YTzCQWF_QsMw--35" target="lSvSTN2YTzCQWF_QsMw--40" edge="1">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
+        <mxCell id="2rKX7VF6ygdCV5GgH_vV-9" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" target="2rKX7VF6ygdCV5GgH_vV-5">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="180" y="632" as="sourcePoint" />
+            <Array as="points">
+              <mxPoint x="180" y="652" />
+              <mxPoint x="440" y="652" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="2rKX7VF6ygdCV5GgH_vV-10" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="lSvSTN2YTzCQWF_QsMw--35" target="2rKX7VF6ygdCV5GgH_vV-6">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="2rKX7VF6ygdCV5GgH_vV-11" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="lSvSTN2YTzCQWF_QsMw--35" target="2rKX7VF6ygdCV5GgH_vV-8">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
         <mxCell id="lSvSTN2YTzCQWF_QsMw--35" value="Fit Voxelwise GLM on the controls data" style="rounded=0;whiteSpace=wrap;html=1;" parent="1" vertex="1">
           <mxGeometry x="119.99999999999999" y="590" width="120" height="50" as="geometry" />
         </mxCell>
@@ -99,20 +114,11 @@
         <mxCell id="lSvSTN2YTzCQWF_QsMw--37" value="Run VBM" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" parent="1" vertex="1">
           <mxGeometry x="552.5" y="476" width="60" height="30" as="geometry" />
         </mxCell>
-        <mxCell id="lSvSTN2YTzCQWF_QsMw--40" value="Get the GLM predictions of the clinical group" style="rounded=0;whiteSpace=wrap;html=1;" parent="1" vertex="1">
-          <mxGeometry x="120" y="670" width="120" height="50" as="geometry" />
+        <mxCell id="lSvSTN2YTzCQWF_QsMw--40" value="Use fitted GLM to predict VBM response on clinical group" style="rounded=0;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+          <mxGeometry x="120" y="750" width="120" height="67" as="geometry" />
         </mxCell>
         <mxCell id="lSvSTN2YTzCQWF_QsMw--42" value="Load GM_mod_merg&lt;div&gt;(s3)&lt;/div&gt;&lt;div&gt;[Clinical VBM images]&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;" parent="1" vertex="1">
           <mxGeometry x="440" y="520" width="120" height="50" as="geometry" />
-        </mxCell>
-        <mxCell id="lSvSTN2YTzCQWF_QsMw--54" value="" style="group;fillColor=#dae8fc;strokeColor=#6c8ebf;" parent="1" vertex="1" connectable="0">
-          <mxGeometry x="280.5" y="647" width="272" height="86" as="geometry" />
-        </mxCell>
-        <mxCell id="lSvSTN2YTzCQWF_QsMw--47" value="For each Clinical subject VBM image" style="rounded=0;whiteSpace=wrap;html=1;horizontal=1;verticalAlign=top;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=5;strokeWidth=3;" parent="lSvSTN2YTzCQWF_QsMw--54" vertex="1">
-          <mxGeometry width="272" height="86" as="geometry" />
-        </mxCell>
-        <mxCell id="lSvSTN2YTzCQWF_QsMw--51" value="$$w_{map} = \frac{VBM_{image} - GLM_{prediction}}{SD_{GLM_{residuals}}}$$" style="rounded=0;whiteSpace=wrap;html=1;fontSize=14;" parent="lSvSTN2YTzCQWF_QsMw--54" vertex="1">
-          <mxGeometry x="6.097333333333328" y="30" width="259.81666666666666" height="50" as="geometry" />
         </mxCell>
         <mxCell id="lSvSTN2YTzCQWF_QsMw--61" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="lSvSTN2YTzCQWF_QsMw--55" target="lSvSTN2YTzCQWF_QsMw--35" edge="1">
           <mxGeometry relative="1" as="geometry" />
@@ -141,11 +147,23 @@
         <mxCell id="lSvSTN2YTzCQWF_QsMw--32" value="fslvbm_3_proc" style="rounded=0;whiteSpace=wrap;html=1;" parent="lSvSTN2YTzCQWF_QsMw--60" vertex="1">
           <mxGeometry x="10" y="140" width="110" height="30" as="geometry" />
         </mxCell>
-        <mxCell id="lSvSTN2YTzCQWF_QsMw--63" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0.001;entryY=0.564;entryDx=0;entryDy=0;entryPerimeter=0;" parent="1" source="lSvSTN2YTzCQWF_QsMw--40" target="lSvSTN2YTzCQWF_QsMw--47" edge="1">
-          <mxGeometry relative="1" as="geometry" />
+        <mxCell id="2rKX7VF6ygdCV5GgH_vV-2" value="" style="group;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" connectable="0" parent="1">
+          <mxGeometry x="250" y="830" width="272" height="86" as="geometry" />
         </mxCell>
-        <mxCell id="lSvSTN2YTzCQWF_QsMw--64" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.808;entryY=-0.021;entryDx=0;entryDy=0;entryPerimeter=0;" parent="1" source="lSvSTN2YTzCQWF_QsMw--42" target="lSvSTN2YTzCQWF_QsMw--47" edge="1">
-          <mxGeometry relative="1" as="geometry" />
+        <mxCell id="2rKX7VF6ygdCV5GgH_vV-3" value="For each Clinical subject VBM image" style="rounded=0;whiteSpace=wrap;html=1;horizontal=1;verticalAlign=top;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=5;strokeWidth=3;" vertex="1" parent="2rKX7VF6ygdCV5GgH_vV-2">
+          <mxGeometry width="272" height="86" as="geometry" />
+        </mxCell>
+        <mxCell id="2rKX7VF6ygdCV5GgH_vV-4" value="$$w_{map} = \frac{VBM_{image} - GLM_{prediction}}{SD_{GLM_{residuals}}}$$" style="rounded=0;whiteSpace=wrap;html=1;fontSize=14;" vertex="1" parent="2rKX7VF6ygdCV5GgH_vV-2">
+          <mxGeometry x="6.097333333333328" y="30" width="259.81666666666666" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="2rKX7VF6ygdCV5GgH_vV-5" value="$$\beta\text{ maps}$$" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="440" y="637" width="90" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="2rKX7VF6ygdCV5GgH_vV-6" value="&lt;div&gt;$$t\text{-}Stat\text{ maps}$$&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="440" y="674" width="90" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="2rKX7VF6ygdCV5GgH_vV-8" value="$$p\text{ value maps}$$" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="440" y="710" width="90" height="30" as="geometry" />
         </mxCell>
       </root>
     </mxGraphModel>
