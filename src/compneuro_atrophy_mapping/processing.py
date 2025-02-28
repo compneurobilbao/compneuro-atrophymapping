@@ -110,96 +110,102 @@ def fit_ols(masked_cn_im: np.ndarray, design_mat_cn: np.ndarray):
     return betas, t_stats, p_values, r_squared
 
 
-def compute_wmaps_from_vbm(gm_mod_merg_control: str,
-                           gm_mod_merg_studygroup: str,
-                           design_matrix_cn: np.ndarray,
-                           design_matrix_studygroup: np.ndarray,
-                           n_jobs: int=None) -> dict:
+def compute_wmaps_from_vbm(gm_mod_merg_path: str,
+                           design_matrix: np.ndarray,
+                           groups_list: list,
+                           n_jobs: int=1) -> dict:
     """_summary_
 
     Parameters
     ----------
-    gm_mod_merg_control : str
-        _description_
-    gm_mod_merg_studygroup : str
-        _description_
-    design_matrix_cn : np.ndarray
-        To fit the normative model.
-    design_matrix_studygroup : np.ndarray
-        To compute the expected VBM signal from the normative model.
+    gm_mod_merg : str
+        Path to the GM_mod_merg_sX.nii.gz file. Both study groups must be merged in the same file.
+    design_matrix : np.ndarray
+        Design matrix for the OLS model. It MUST be in the same order as the GM_mod_merg file.
+    groups_list : list
+        A list containing which rows of the design matrix correspond to each group. It is a list of
+        1s and 0s, where 1s indicate the rows corresponding to the control group.
+    n_jobs : int, optional
+        Number of jobs to run in parallel, by default 1
 
     Returns
     -------
     dict
         Dictionary containing the gm_common_mask, beta, t, p-val, and W-score maps.
+
+    Raises
+    ------
+    ValueError
+        When n_jobs is less than 1 and not -1 (use all available cores).
     """
+    if n_jobs < 1 and n_jobs != -1:  # Throw error because n_jobs must be higher or equal to 1
+        raise ValueError("[ERROR]: n_jobs must be higher than 0 in compute_wmaps_from_vbm.")
 
-    # Read the GM_mod_merg images
-    gm_mod_control = image.load_img(gm_mod_merg_control)
-    gm_mod_studygroup = image.load_img(gm_mod_merg_studygroup)
+    # Read the GM_mod_merg image (contains controls and studygroup)
+    gm_mod = image.load_img(gm_mod_merg_path)
 
-    # Read the GM masks
-    gm_mask_cn_path = os.path.join(os.path.dirname(gm_mod_merg_control),
-                                   "GM_mask.nii.gz")
-    gm_mask_cn = image.load_img(gm_mask_cn_path)
-    
-    gm_mask_studygroup_path = os.path.join(os.path.dirname(gm_mod_merg_studygroup),
-                                           "GM_mask.nii.gz")
-    gm_mask_studygroup = image.load_img(gm_mask_studygroup_path)
+    # Read the GM mask
+    gm_mask_path = os.path.join(os.path.dirname(gm_mod_merg_path), "GM_mask.nii.gz")
+    gm_mask = image.load_img(gm_mask_path)
 
-    # Compute the joint mask
-    gm_common_mask = image.math_img("np.where((mask1 * mask2) > 0, 1.0, 0.0)",
-                                    mask1=gm_mask_cn,
-                                    mask2=gm_mask_studygroup)
+    # Initialize a masker to fit to the GM mask
+    masker_gm = NiftiMasker(mask_img=gm_mask).fit()
 
-    # Initialize the masker and fit it to the common mask
-    masker_mni = NiftiMasker(mask_img=FULL_MNI_152_HOLELESS_BRAIN).fit()
+    # Get the indices of the images belonging to each clinical group from the groups list
+    control_indices = [i for i, group in enumerate(groups_list) if group == 1]
+    studygroup_indices = [i for i, group in enumerate(groups_list) if group == 0]
+    # Index the images according to the indices. Getting the images for each group
+    gm_mod_control = image.index_img(gm_mod, control_indices)
+    gm_mod_studygroup = image.index_img(gm_mod, studygroup_indices)
+    # Mask the control VBM image to the GM mask (convert to np.array)
+    gm_mod_control_masked = masker_gm.transform(gm_mod_control)
 
-    # Apply the joint mask
-    vbm_response_cn_masked = masker_mni.transform(gm_mod_control)
-    vbm_response_studygroup_masked = masker_mni.transform(gm_mod_studygroup)
-
-    # Unmask to operate in image form if needed
-    gm_mod_control = masker_mni.inverse_transform(vbm_response_cn_masked)
-    gm_mod_studygroup = masker_mni.inverse_transform(vbm_response_studygroup_masked)
+    # Index the design matrix according to the indices
+    design_matrix_cn = design_matrix[control_indices, :]
+    design_matrix_studygroup = design_matrix[studygroup_indices, :]
 
     # Fit the OLS model voxelwise
     print("[INFO] Fitting the voxelwise OLS model.")
     if n_jobs == 1:  # Single job
-        betas, t_stats, p_values, r_squared = fit_ols(vbm_response_cn_masked,
-                                                      design_matrix_cn)
-    elif n_jobs < 1 and n_jobs != -1:  # Throw error because n_jobs must be higher or equal to 1
-        raise ValueError("[ERROR]: n_jobs must be higher than 0 in compute_wmaps_from_vbm.")
+        betas, t_stats, p_values, r_squared = fit_ols(gm_mod_control_masked, design_matrix_cn)
     else:  # n_jobs > 1
-        betas, t_stats, p_values, r_squared = fit_voxelwise_ols_parallel(vbm_response_cn_masked,
+        betas, t_stats, p_values, r_squared = fit_voxelwise_ols_parallel(gm_mod_control_masked,
                                                                          design_matrix_cn,
                                                                          n_jobs=n_jobs)
 
     # Unmask the statistical maps
     print("[INFO] Finished fitting voxelwise OLS model, check the R-square map to see the goodness of fit.")
-    beta_maps = masker_mni.inverse_transform(betas.T)
-    t_maps = masker_mni.inverse_transform(t_stats.T)
-    p_values_maps = masker_mni.inverse_transform(p_values.T)
-    r_squared_map = masker_mni.inverse_transform(r_squared)
+    beta_maps = masker_gm.inverse_transform(betas.T)
+    t_maps = masker_gm.inverse_transform(t_stats.T)
+    p_values_maps = masker_gm.inverse_transform(p_values.T)
+    r_squared_map = masker_gm.inverse_transform(r_squared)
 
-    # Compute residuals
+    # Compute residuals and their standard deviation in the 4th dimension
     predicted = design_matrix_cn @ betas.T
-    residuals = vbm_response_cn_masked - predicted
-    residuals_im = masker_mni.inverse_transform(residuals)
-    sd_of_residuals = image.math_img("np.std(a, axis=3)", a=residuals_im)
+    residuals = gm_mod_control_masked - predicted
+    sd_of_residuals = np.std(residuals, axis=0)
+    sd_of_residuals_im = masker_gm.inverse_transform(sd_of_residuals)
 
-    # Compute the W-score maps
+    # Compute the W-score maps. Image indexing is slow, but result is lighter than the alternative.
+    print("[INFO] Computing the W-score maps.")
     wmaps = []
     predicted_studygroup = design_matrix_studygroup @ betas.T
-    gm_predicted_studygroup_im = masker_mni.inverse_transform(predicted_studygroup)
+    gm_predicted_studygroup_im = masker_gm.inverse_transform(predicted_studygroup)
     for i in range(gm_mod_studygroup.shape[3]):
         pred = image.index_img(gm_predicted_studygroup_im, i)
         obsr = image.index_img(gm_mod_studygroup, i)
         wmap = image.math_img("(a - b) / c",
                               a=obsr,
                               b=pred,
-                              c=sd_of_residuals)
+                              c=sd_of_residuals_im)
         wmaps.append(wmap)
+
+    # Alternative wmap computation.
+    # Same result, but faster since it uses the masker.
+    # However, the filesize is around 2x bigger.
+    # obsr = masker_gm.transform(gm_mod_studygroup)
+    # wmaps_alt = (obsr - predicted_studygroup) / sd_of_residuals
+    # wmaps_alt = masker_gm.inverse_transform(wmaps_alt)
 
     # Concatenate the wmaps
     wmaps = image.concat_imgs(wmaps)
@@ -207,6 +213,8 @@ def compute_wmaps_from_vbm(gm_mod_merg_control: str,
     # Remove NaN values from wmaps
     wmaps = image.math_img("np.nan_to_num(a, nan=0.0, posinf=0.0, neginf=0.0)",
                            a=wmaps)
+    # wmaps_alt = image.math_img("np.nan_to_num(a, nan=0.0, posinf=0.0, neginf=0.0)",
+    #                        a=wmaps_alt)
     print("[INFO] Finished computing the W-score maps.")
 
     # Organize the results
@@ -214,13 +222,14 @@ def compute_wmaps_from_vbm(gm_mod_merg_control: str,
                 "tmaps": t_maps,
                 "pvalues": p_values_maps,
                 "wmaps": wmaps,
-                "sd_of_residuals": sd_of_residuals,
+                # "wmaps_alt": wmaps_alt,
+                "sd_of_residuals": sd_of_residuals_im,
                 "r_squared": r_squared_map}
 
     # Apply the common subject mask to the outputs before saving (only GM results wanted)
-    results = {key: unmask(apply_mask(results[key], gm_common_mask), gm_common_mask) for key in results.keys()}
+    results = {key: unmask(apply_mask(results[key], gm_mask), gm_mask) for key in results.keys()}
     # Include the common mask
-    results["gm_common_mask"] = gm_common_mask
+    results["gm_mask"] = gm_mask
 
     return results
 
