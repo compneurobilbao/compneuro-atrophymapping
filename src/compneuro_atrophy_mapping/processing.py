@@ -137,7 +137,14 @@ def compute_wmaps_from_vbm(gm_mod_merg_path: str,
     ------
     ValueError
         When n_jobs is less than 1 and not -1 (use all available cores).
+    TypeError
+        When groups_list is not a list.
     """
+    if not isinstance(groups_list, list):
+        raise TypeError("[ERROR]: groups_list must be a list in compute_wmaps_from_vbm.")
+    if not isinstance(design_matrix, np.ndarray):
+        warnings.warn("[WARNING]: design_matrix is not a numpy array. Converting to numpy array.")
+        design_matrix = design_matrix.to_numpy()
     if n_jobs < 1 and n_jobs != -1:  # Throw error because n_jobs must be higher or equal to 1
         raise ValueError("[ERROR]: n_jobs must be higher than 0 in compute_wmaps_from_vbm.")
 
