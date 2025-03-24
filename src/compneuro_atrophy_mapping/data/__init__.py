@@ -5,12 +5,15 @@ from os.path import join as opj
 from nilearn import image
 from compneuro_atrophy_mapping import data
 
-# Locate the full MNI152 holeless brain mask
+# Locate the images
 datasets_path = str(pkg_resources.files(data))
 full_mni152_holeless_brain_path = opj(datasets_path, "full_MNI152_T1_2mm_brain_mask.nii.gz")
+gm_mask_2mm_path = opj(datasets_path, "GM_mask_2mm.nii.gz")
 
-# Load the full MNI152 holeless brain mask
+
+# Load the images
 FULL_MNI_152_HOLELESS_BRAIN = image.load_img(full_mni152_holeless_brain_path)
+GM_MASK_2MM = image.load_img(gm_mask_2mm_path)
 
 # Cleanup so you can only import the template and the template path
 del data

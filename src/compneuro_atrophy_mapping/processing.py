@@ -13,7 +13,7 @@ from nilearn.masking import apply_mask, unmask
 
 from tqdm import tqdm
 
-from compneuro_atrophy_mapping.data import FULL_MNI_152_HOLELESS_BRAIN
+from compneuro_atrophy_mapping.data import GM_MASK_2MM
 
 # Ignore the RuntimeWarnings to ignore the division by zero raised by numpy
 warnings.filterwarnings("ignore", category=RuntimeWarning)
@@ -151,12 +151,9 @@ def compute_wmaps_from_vbm(gm_mod_merg_path: str,
     # Read the GM_mod_merg image (contains controls and studygroup)
     gm_mod = image.load_img(gm_mod_merg_path)
 
-    # Read the GM mask
-    gm_mask_path = os.path.join(os.path.dirname(gm_mod_merg_path), "GM_mask.nii.gz")
-    gm_mask = image.load_img(gm_mask_path)
-
-    # Initialize a masker to fit to the GM mask
-    masker_gm = NiftiMasker(mask_img=gm_mask).fit()
+    # Initialize a masker to fit to the GM mask from the package.
+    # The one that FSL estimates is too much, it includes almost the whole brain.
+    masker_gm = NiftiMasker(mask_img=GM_MASK_2MM).fit()
 
     # Get the indices of the images belonging to each clinical group from the groups list
     control_indices = [i for i, group in enumerate(groups_list) if group == 0]
@@ -179,9 +176,10 @@ def compute_wmaps_from_vbm(gm_mod_merg_path: str,
         betas, t_stats, p_values, r_squared = fit_voxelwise_ols_parallel(gm_mod_control_masked,
                                                                          design_matrix_cn,
                                                                          n_jobs=n_jobs)
+    print("[INFO] Finished fitting voxelwise OLS model, check the R-square map to see the goodness of fit.")
 
     # Unmask the statistical maps
-    print("[INFO] Finished fitting voxelwise OLS model, check the R-square map to see the goodness of fit.")
+    print("[INFO] Saving the statistical maps and computing the standard deviation of residuals.")
     beta_maps = masker_gm.inverse_transform(betas.T)
     t_maps = masker_gm.inverse_transform(t_stats.T)
     p_values_maps = masker_gm.inverse_transform(p_values.T)
@@ -194,7 +192,7 @@ def compute_wmaps_from_vbm(gm_mod_merg_path: str,
     sd_of_residuals_im = masker_gm.inverse_transform(sd_of_residuals)
 
     # Compute the W-score maps. Image indexing is slow, but result is lighter than the alternative.
-    print("[INFO] Computing the W-score maps.")
+    print("[INFO] Computing the W-score maps using the fitted GLM.")
     wmaps = []
     predicted_studygroup = design_matrix_studygroup @ betas.T
     gm_predicted_studygroup_im = masker_gm.inverse_transform(predicted_studygroup)
@@ -207,21 +205,13 @@ def compute_wmaps_from_vbm(gm_mod_merg_path: str,
                               c=sd_of_residuals_im)
         wmaps.append(wmap)
 
-    # Alternative wmap computation.
-    # Same result, but faster since it uses the masker.
-    # However, the filesize is around 2x bigger.
-    # obsr = masker_gm.transform(gm_mod_studygroup)
-    # wmaps_alt = (obsr - predicted_studygroup) / sd_of_residuals
-    # wmaps_alt = masker_gm.inverse_transform(wmaps_alt)
-
     # Concatenate the wmaps
     wmaps = image.concat_imgs(wmaps)
 
     # Remove NaN values from wmaps
     wmaps = image.math_img("np.nan_to_num(a, nan=0.0, posinf=0.0, neginf=0.0)",
                            a=wmaps)
-    # wmaps_alt = image.math_img("np.nan_to_num(a, nan=0.0, posinf=0.0, neginf=0.0)",
-    #                        a=wmaps_alt)
+
     print("[INFO] Finished computing the W-score maps.")
 
     # Organize the results
@@ -229,14 +219,13 @@ def compute_wmaps_from_vbm(gm_mod_merg_path: str,
                 "tmaps": t_maps,
                 "pvalues": p_values_maps,
                 "wmaps": wmaps,
-                # "wmaps_alt": wmaps_alt,
                 "sd_of_residuals": sd_of_residuals_im,
                 "r_squared": r_squared_map}
 
     # Apply the common subject mask to the outputs before saving (only GM results wanted)
-    results = {key: unmask(apply_mask(results[key], gm_mask), gm_mask) for key in results.keys()}
-    # Include the common mask
-    results["gm_mask"] = gm_mask
+    results = {key: unmask(apply_mask(results[key], GM_MASK_2MM), GM_MASK_2MM) for key in results.keys()}
+    # Include the GM mask in the results (unnecessary to mask it with itself)
+    results["gm_mask"] = GM_MASK_2MM
 
     return results
 
