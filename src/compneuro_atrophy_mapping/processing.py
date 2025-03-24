@@ -159,8 +159,8 @@ def compute_wmaps_from_vbm(gm_mod_merg_path: str,
     masker_gm = NiftiMasker(mask_img=gm_mask).fit()
 
     # Get the indices of the images belonging to each clinical group from the groups list
-    control_indices = [i for i, group in enumerate(groups_list) if group == 1]
-    studygroup_indices = [i for i, group in enumerate(groups_list) if group == 0]
+    control_indices = [i for i, group in enumerate(groups_list) if group == 0]
+    studygroup_indices = [i for i, group in enumerate(groups_list) if group == 1]
     # Index the images according to the indices. Getting the images for each group
     gm_mod_control = image.index_img(gm_mod, control_indices)
     gm_mod_studygroup = image.index_img(gm_mod, studygroup_indices)
