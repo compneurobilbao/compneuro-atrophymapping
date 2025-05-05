@@ -10,6 +10,7 @@ from joblib import Parallel, delayed
 from nilearn import image
 from nilearn.maskers import NiftiMasker
 from nilearn.masking import apply_mask, unmask
+from compneuro_tools.fit_glm import fit_glm
 
 from tqdm import tqdm
 
@@ -170,31 +171,30 @@ def compute_wmaps_from_vbm(gm_mod_merg_path: str,
 
     # Fit the OLS model voxelwise
     print("[INFO] Fitting the voxelwise OLS model.")
-    if n_jobs == 1:  # Single job
-        betas, t_stats, p_values, r_squared = fit_ols(gm_mod_control_masked, design_matrix_cn)
-    else:  # n_jobs > 1
-        betas, t_stats, p_values, r_squared = fit_voxelwise_ols_parallel(gm_mod_control_masked,
-                                                                         design_matrix_cn,
-                                                                         n_jobs=n_jobs)
-    print("[INFO] Finished fitting voxelwise OLS model, check the R-square map to see the goodness of fit.")
+    placeholder_contrast = np.array([1] + [0] * (design_matrix_cn.shape[1] - 1))
+    placeholder_contrast = np.array([placeholder_contrast, -placeholder_contrast])
+    results = fit_glm(GM_MASK_2MM,
+                      gm_mod_control,
+                      design_matrix_cn,
+                      contrast_matrix=placeholder_contrast)
+    results = results["contrast_0"]
 
     # Unmask the statistical maps
     print("[INFO] Saving the statistical maps and computing the standard deviation of residuals.")
-    beta_maps = masker_gm.inverse_transform(betas.T)
-    t_maps = masker_gm.inverse_transform(t_stats.T)
-    p_values_maps = masker_gm.inverse_transform(p_values.T)
-    r_squared_map = masker_gm.inverse_transform(r_squared)
+    beta_maps = results["betas"]
+    t_maps = results["Tstat"]
+    z_maps = results["Zstat"]
 
     # Compute residuals and their standard deviation in the 4th dimension
-    predicted = design_matrix_cn @ betas.T
-    residuals = gm_mod_control_masked - predicted
+    residuals = masker_gm.transform(results["residuals"])
+    # Compute the standard deviation of the residuals
     sd_of_residuals = np.std(residuals, axis=0)
     sd_of_residuals_im = masker_gm.inverse_transform(sd_of_residuals)
 
     # Compute the W-score maps. Image indexing is slow, but result is lighter than the alternative.
     print("[INFO] Computing the W-score maps using the fitted GLM.")
     wmaps = []
-    predicted_studygroup = design_matrix_studygroup @ betas.T
+    predicted_studygroup = design_matrix_studygroup @ masker_gm.transform(results["betas"])
     gm_predicted_studygroup_im = masker_gm.inverse_transform(predicted_studygroup)
     for i in range(gm_mod_studygroup.shape[3]):
         pred = image.index_img(gm_predicted_studygroup_im, i)
@@ -217,10 +217,9 @@ def compute_wmaps_from_vbm(gm_mod_merg_path: str,
     # Organize the results
     results = {"betamaps": beta_maps,
                 "tmaps": t_maps,
-                "pvalues": p_values_maps,
+                "zmaps": z_maps,
                 "wmaps": wmaps,
-                "sd_of_residuals": sd_of_residuals_im,
-                "r_squared": r_squared_map}
+                "sd_of_residuals": sd_of_residuals_im}
 
     # Apply the common subject mask to the outputs before saving (only GM results wanted)
     results = {key: unmask(apply_mask(results[key], GM_MASK_2MM), GM_MASK_2MM) for key in results.keys()}
